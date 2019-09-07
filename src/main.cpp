@@ -46,6 +46,8 @@
 #define DAZ_TAG_UID  	 {0x49, 0x87, 0x94, 0x6D}
 #define SANJIT_TAG_UID 	 {0xA6, 0xA8, 0x6F, 0xF9}
 
+#define SCROLL_SPEED	300
+
 typedef enum
 {
 	CORRECT = 0,
@@ -53,7 +55,8 @@ typedef enum
 	PHIL_SPILL,
 	AIMEE_TRIGGERED_RACISM,
 	NAM_GETS_THE_GOSS,
-	NO_SEXY_DAZ
+	NO_SEXY_DAZ,
+	WRONG
 } SEATING_RESULT;
 
 // Seat structure
@@ -63,39 +66,31 @@ typedef struct
 	uint8_t correct_uid[UID_LENGTH];	// The correct person who should be in this seat 
 } Seat;
 
-// Person structure
-typedef struct 
-{
-	uint8_t uid[UID_LENGTH];	// UID of person
-	uint8_t seat_position;		// Position of person
-} Person;
-
 // Array of all tags
 uint8_t TAG_UIDS[NUMBER_OF_PEOPLE][UID_LENGTH] = {AIMEE_TAG_UID, PHIL_TAG_UID, NAM_TAG_UID, DAZ_TAG_UID, SANJIT_TAG_UID};
 
 // Array of slave pins
-const uint8_t SS_PINS[] = {AIMEE_SS_PIN, PHIL_SS_PIN, NAM_SS_PIN, DAZ_SS_PIN, SANJIT_SS_PIN};
+uint8_t SS_PINS[] = {AIMEE_SS_PIN, PHIL_SS_PIN, NAM_SS_PIN, DAZ_SS_PIN, SANJIT_SS_PIN};
 
-// Array of peoples seating positions
+// Array of peoples seating positions. This is used in our comparisons to check if they're right
 uint8_t person_seating_position[NUMBER_OF_PEOPLE];
 
 // Array of everyones seats 
 Seat seats[NUMBER_OF_PEOPLE];   
-LiquidCrystal_I2C lcd(0x27,16,2);  		// Create LCD instance. Set the LCD address to 0x27 for a 16 chars and 2 line display
-const uint8_t heart_char[8] 	= {0x0,0xa,0x1f,0x1f,0xe,0x4,0x0};
 
+// LCD instance. Set the LCD address to 0x27 for a 16 chars and 2 line display
+LiquidCrystal_I2C lcd(0x27,16,2);  		
+
+// Heart <3
+uint8_t heart_char[8] 	= {0x0,0xa,0x1f,0x1f,0xe,0x4,0x0};
+
+// Prototype function headers
 void seating_result_message(SEATING_RESULT result);
-void dump_byte_array(byte *buffer, byte bufferSize);
-void dump_byte_array_lcd(byte *buffer, byte bufferSize);
 void scroll_lcd_text_top(char* text);
-void scroll_lcd_text_bot(char* text);
 
 // Setup code. Runs once on startup
 void setup() 
 {	
-	Serial.begin(9600);		// Initialize serial communications with the PC
-	while (!Serial);		// Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
-
 	pinMode(BUTTON_PIN, INPUT);	// Set up button
 
 	for (uint8_t seat = 0; seat < NUMBER_OF_PEOPLE; seat++)
@@ -111,14 +106,13 @@ void setup()
 	SPI.begin();				// Init SPI bus
 
 	lcd.init();                      	// Initialize the lcd 
-	// lcd.createChar(0, heart_char);		// Make the heart character
+	lcd.createChar(0, heart_char);		// Make the heart character
 	lcd.backlight();
-	// lcd.setContrast();
 	lcd.clear();
 	lcd.home();
 	lcd.print("Press button");
 	lcd.setCursor(0,1);
-	lcd.print("when ready...");
+	lcd.print("to assign seats...");
 }
 
 // Main loop
@@ -128,8 +122,6 @@ void loop()
 	if (digitalRead(BUTTON_PIN) == HIGH)
 	{
 		// THE BUTTON HAS BEEN PRESSED. A GUESS HAS BEEN MADE
-
-		SEATING_RESULT seating_result = CORRECT; 	// Result of guess
 
 		lcd.clear();
 		lcd.home();
@@ -175,27 +167,6 @@ void loop()
 			}
 		}
 
-		// Now we've looked at every seat and everyone is here, lets check if they're right
-  		for (uint8_t seat = 0; seat < NUMBER_OF_PEOPLE; seat++) 
-		{
-			// Compare the read uid with the one that is meant to be on the seat
-			if (memcmp(seats[seat].reader.uid.uidByte, seats[seat].correct_uid, UID_LENGTH) != 0)
-			{
-				// They are different, which means they are wrong. SAD
-				seating_result = PERSON_MISSING; // I know a person isn't missing, but this acts as a flag for now
-				break; // break from for loop
-			}
-		}
-
-		// If the bastards got it
-		if (seating_result == CORRECT)
-		{
-			// Show winning message. This will loop forever, so will require a hard reset to play again
-			seating_result_message(CORRECT);
-		}
-
-		// So we know they're wrong. Let's figure out how wrong they are
-
 		// Check all seats again and get everyones seating position (there is a disgusting amount of for loops in this code)
   		for (uint8_t seat = 0; seat < NUMBER_OF_PEOPLE; seat++) 
 		{
@@ -210,13 +181,6 @@ void loop()
 				}
 			}
 		}
-
-		Serial.print("phil pos: ");
-		Serial.print(person_seating_position[PHIL]);
-		Serial.println();
-		Serial.print("sanjo pos: ");
-		Serial.print(person_seating_position[SANJIT]);
-		Serial.println();
 		
 		/************************************
 		 * Check Phil Spill
@@ -244,30 +208,132 @@ void loop()
 		// Phil isn't on the ends of the table, lets see if Sanjo is next to him
 		else if ((person_seating_position[PHIL] == (person_seating_position[SANJIT] - 1)) ||
 			person_seating_position[PHIL] == (person_seating_position[SANJIT] + 1))
+		{
+			seating_result_message(PHIL_SPILL);
+			return;
+		}
+
+
+		/***********************************
+		 * Aimee #triggered
+		 ***********************************/
+		// If Aimee is sitting far left (like her politics)
+		if (person_seating_position[AIMEE] == 0)
+		{
+			// If Sanjit or Daz are on her right
+			if ((person_seating_position[AIMEE] == (person_seating_position[SANJIT] - 1)) ||
+			(person_seating_position[AIMEE] == (person_seating_position[DAZ] - 1)))
 			{
-				seating_result_message(PHIL_SPILL);
+				seating_result_message(AIMEE_TRIGGERED_RACISM);
 				return;
 			}
+		}
+		// Else if Aimee is sitting far right (like her fiance)
+		else if (person_seating_position[AIMEE] == (NUMBER_OF_PEOPLE - 1))
+		{
+			// If Sanjit or Daz are on her left
+			if ((person_seating_position[AIMEE] == (person_seating_position[SANJIT] + 1)) ||
+			(person_seating_position[AIMEE] == (person_seating_position[DAZ] + 1)))
+			{
+				seating_result_message(AIMEE_TRIGGERED_RACISM);
+				return;
+			}	
+		}
+		// Aimee isn't on the ends of the table, lets see if Sanjo or Dazzy boi are next to her
+		else if ((person_seating_position[AIMEE] == (person_seating_position[SANJIT] - 1)) ||
+			(person_seating_position[AIMEE] == (person_seating_position[DAZ] - 1)) ||
+			(person_seating_position[AIMEE] == (person_seating_position[SANJIT] + 1)) ||
+			(person_seating_position[AIMEE] == (person_seating_position[DAZ] + 1)))
+		{
+			seating_result_message(AIMEE_TRIGGERED_RACISM);
+			return;
+		}
 
+		/***********************************
+		 * Nam get's the goss
+		 ***********************************/
+		// If Nam is sitting far left (the politics joke is old now)
+		if (person_seating_position[NAM] == 0)
+		{
+			// If Sanjit or Aimee are on her right
+			if ((person_seating_position[NAM] == (person_seating_position[SANJIT] - 1)) ||
+			(person_seating_position[NAM] == (person_seating_position[AIMEE] - 1)))
+			{
+				seating_result_message(NAM_GETS_THE_GOSS);
+				return;
+			}
+		}
+		// Else if Nam is sitting far right
+		else if (person_seating_position[NAM] == (NUMBER_OF_PEOPLE - 1))
+		{
+			// If Sanjit or Aimee are on her left
+			if ((person_seating_position[NAM] == (person_seating_position[SANJIT] + 1)) ||
+			(person_seating_position[NAM] == (person_seating_position[AIMEE] + 1)))
+			{
+				seating_result_message(NAM_GETS_THE_GOSS);
+				return;
+			}	
+		}
+		// Nam isn't on the ends of the table, lets see if Sanjo or Aims are next to her
+		else if ((person_seating_position[NAM] == (person_seating_position[SANJIT] - 1)) ||
+			(person_seating_position[NAM] == (person_seating_position[AIMEE] - 1)) ||
+			(person_seating_position[NAM] == (person_seating_position[SANJIT] + 1)) ||
+			(person_seating_position[NAM] == (person_seating_position[AIMEE] + 1)))
+		{
+			seating_result_message(NAM_GETS_THE_GOSS);
+			return;
+		}
 
-    		// // Look for new cards
-			// if ((seats[seat].reader.PICC_IsNewCardPresent()) && (seats[seat].reader.PICC_ReadCardSerial())) 
-			// {
-			// 	Serial.print("seat ");
-			// 	Serial.print(seat);
-			// 	// Show some details of the PICC (that is: the tag/card)
-			// 	Serial.print(": Card UID: " );
-			// 	dump_byte_array(seats[seat].reader.uid.uidByte, seats[seat].reader.uid.size);
-			// 	Serial.println();
-			// 	Serial.print("size: ");
-			// 	Serial.print(seats[seat].reader.uid.size, HEX);
-			// 	Serial.println();
-			// }
-			
-			// delay(10);
+		/***********************************
+		 * Daz no look good
+		 ***********************************/
+		if (person_seating_position[NAM] > person_seating_position[DAZ])
+		{
+			seating_result_message(NO_SEXY_DAZ);
+			return;
+		}
 
-		lcd.print("End");
+		/***********************************
+		 * Are they correct???????
+		 ***********************************/
+		// Let's make sure they're right
+  		for (uint8_t seat = 0; seat < NUMBER_OF_PEOPLE; seat++) 
+		{
+			// Compare the read uid with the one that is meant to be on the seat
+			if (memcmp(seats[seat].reader.uid.uidByte, seats[seat].correct_uid, UID_LENGTH) != 0)
+			{
+				// They are different, which means they are wrong.
+				// This shouldn't be the case cos we should have caught it above, but just in case. 
+				seating_result_message(WRONG);
+				return; 
+			}
+		}
 
+		// The bastards got it
+		// Show winning message. This will loop forever, so will require a hard reset to play again
+		seating_result_message(CORRECT);
+		lcd.clear();
+		lcd.home();
+		lcd.print("Codeword: CHICKS");
+		// LOOP FOREVER
+		// Do a little heart dance on the bottom
+		while(1)
+		{
+			lcd.setCursor(0,1);
+			for (uint8_t i = 0; i < 8; i++)
+			{
+				lcd.write(0);
+				lcd.print(" ");
+			}
+			delay(1000);
+			lcd.setCursor(0,1);
+			for (uint8_t i = 0; i < 8; i++)
+			{
+				lcd.print(" ");
+				lcd.write(0);
+			}
+			delay(1000);
+		}
 	}
 }
 
@@ -281,8 +347,10 @@ void seating_result_message(SEATING_RESULT result)
 		case CORRECT:
 			lcd.clear();
 			lcd.home();
-			scroll_lcd_text_top("Well fuckin done. You got it. Code word is \"CHICKS\"");
-			while(1);	// LOOP FOREVER!!!!!!!!!!!!!!!
+			lcd.setCursor(0,1);
+			lcd.print("YAY YAY YAY YAY YAY YAY YAY YAY YAY ");
+			scroll_lcd_text_top("Well bloody done. You've got it. Everyone is happily seated :D");
+			delay(1000);
 			break;
 		
 		case PERSON_MISSING:
@@ -290,7 +358,7 @@ void seating_result_message(SEATING_RESULT result)
 			lcd.home();
 			lcd.setCursor(0,1);
 			lcd.print("RUDE RUDE RUDE RUDE RUDE RUDE RUDE RUDE ");
-			scroll_lcd_text_top("There's someone bloody missing!!   That's a little RUDE of you don't you think?");
+			scroll_lcd_text_top("There's someone bloody missing!! That's a little RUDE of you don't you think?");
 			delay(1000);
 			lcd.clear();
 			lcd.home();
@@ -300,7 +368,7 @@ void seating_result_message(SEATING_RESULT result)
 			lcd.home();
 			lcd.print("Press button");
 			lcd.setCursor(0,1);
-			lcd.print("when ready...");
+			lcd.print("to assign seats...");
 			break;
 
 		case PHIL_SPILL:
@@ -308,7 +376,7 @@ void seating_result_message(SEATING_RESULT result)
 			lcd.home();
 			lcd.setCursor(0,1);
 			lcd.print("SPILL SPILL SPILL SPILL SPILL SPILL SPIL");
-			scroll_lcd_text_top("Great. Now Phil has spilled all his wine on Sanjo. THE ELBOWS ARE LOOSE NOW TOO OH MY GOD");
+			scroll_lcd_text_top("Great. Phil has spilled all his wine on Sanjit. THE ELBOWS ARE LOOSE NOW TOO OH MY GOD");
 			delay(1000);
 			lcd.clear();
 			lcd.home();
@@ -318,30 +386,74 @@ void seating_result_message(SEATING_RESULT result)
 			lcd.home();
 			lcd.print("Press button");
 			lcd.setCursor(0,1);
-			lcd.print("when ready...");		
+			lcd.print("to assign seats...");
+			break;
+
+		case AIMEE_TRIGGERED_RACISM:
+			lcd.clear();
+			lcd.home();
+			lcd.setCursor(0,1);
+			lcd.print("CASUAL RACISM CASUAL RACISM CASUAL RACIS");
+			scroll_lcd_text_top("Oh no. Aimee is not happy because someone next to her said the n-word");
+			delay(1000);
+			lcd.clear();
+			lcd.home();
+			lcd.print("Try again!");
+			delay(1000);
+			lcd.clear();
+			lcd.home();
+			lcd.print("Press button");
+			lcd.setCursor(0,1);
+			lcd.print("to assign seats...");
+			break;
+			
+		case NAM_GETS_THE_GOSS:
+			lcd.clear();
+			lcd.home();
+			lcd.setCursor(0,1);
+			lcd.print("DAZ GOSS DAZ GOSS DAZ GOSS DAZ GOSS DAZ ");
+			scroll_lcd_text_top("One of you bastards told Nam about the time I got kicked out of Willow #chairgate");
+			delay(1000);
+			lcd.clear();
+			lcd.home();
+			lcd.print("Try again!");
+			delay(1000);
+			lcd.clear();
+			lcd.home();
+			lcd.print("Press button");
+			lcd.setCursor(0,1);
+			lcd.print("to assign seats...");
+			break;
+
+		case NO_SEXY_DAZ:
+			lcd.clear();
+			lcd.home();
+			lcd.setCursor(0,1);
+			lcd.print("DAZ NOT HOT DAZ NOT HOT DAZ NOT HOT ");
+			scroll_lcd_text_top("Nam just looked at me from the left for the first time and she's disgusted");
+			delay(1000);
+			lcd.clear();
+			lcd.home();
+			lcd.print("Try again!");
+			delay(1000);
+			lcd.clear();
+			lcd.home();
+			lcd.print("Press button");
+			lcd.setCursor(0,1);
+			lcd.print("to assign seats...");
 			break;
 
 		default:
+			lcd.clear();
+			lcd.home();
+			scroll_lcd_text_top("Something fucked has happened. You should never get here, but fuck it I'll put something here anyway");
 			break;
 		}
 }
 
 /**
- * Compares uid arrays to see if they are equal
- * @returns bool true if equal, false if not equal
+ * Scrolls display while writting text on top line 
  */
-bool check_uid_same(byte* read_uid, byte* correct_uid)
-{
-	for (uint8_t i; i < UID_LENGTH; i++)
-	{
-		if (read_uid[i] != correct_uid[i])
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
 void scroll_lcd_text_top(char* text)
 {
 	int string_length = strlen(text);
@@ -361,49 +473,7 @@ void scroll_lcd_text_top(char* text)
 			lcd.setCursor(lcd_position, 0);  // Set the cursor to column 1, line 0
 		}
 
-		delay(225);
+		delay(SCROLL_SPEED);
 	}
-}
-
-void scroll_lcd_text_bot(char* text)
-{
-	int string_length = strlen(text);
-	uint8_t lcd_position = 16;
-
-	lcd.setCursor(lcd_position, 1);  // Set the cursor to column 15, line 1
-
-	for (uint8_t text_position = 0; text_position < string_length; text_position++)
-	{
-		lcd.print(text[text_position]);
-		lcd.scrollDisplayLeft(); // Scrolls the contents of the display one space to the left
-		lcd_position++;
-
-		if (lcd_position == 40)
-		{
-			lcd_position = 0;
-			lcd.setCursor(lcd_position, 1);  // Set the cursor to column 1, line 1
-		}
-
-		delay(225);
-	}
-}
-
-/**
- * Helper routine to dump a byte array as hex values to Serial.
- */
-void dump_byte_array(byte *buffer, byte bufferSize) 
-{
-  for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-    Serial.print(buffer[i], HEX);
-  }
-}
-
-void dump_byte_array_lcd(byte *buffer, byte bufferSize)
-{
-  for (byte i = 0; i < bufferSize; i++) {
-    lcd.print(buffer[i] < 0x10 ? " 0" : " ");
-    lcd.print(buffer[i], HEX);
-  }
 }
 
