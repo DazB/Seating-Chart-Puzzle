@@ -8,12 +8,20 @@
  * SPI MISO		    MISO        12 (Green)
  * SPI MOSI    		MOSI        11 (Orange)
  *
- * seats RST		RST			10
- * AIMEE SPI SS     SDA(SS)     5   
- * PHIL SPI SS		SDA(SS)		6	
- * NAM SPI SS		SDA(SS)		7
- * DAZ SPI SS		SDA(SS)		8
- * SANJIT SPI SS	SDA(SS)		9
+ * SEATS RST		RST			10
+ * AIMEE SPI SS     SDA(SS)     0
+ * PHIL SPI SS		SDA(SS)		1	
+ * NAM SPI SS		SDA(SS)		2
+ * DAZ SPI SS		SDA(SS)		3
+ * SANJIT SPI SS	SDA(SS)		4
+ * 
+ * BUTTON IN		BUTTON		9
+ * BUTTON +			VCC			3v3
+ * 
+ * LCD + 			VCC			5v
+ * LCD SCL			SCL			A5
+ * LCD SDA			SDA			A4
+ * 
  */
 
 #include <Arduino.h>
@@ -26,12 +34,12 @@
 
 #define NUMBER_OF_PEOPLE		5
 
-#define BUTTON_PIN 			4
-#define AIMEE_SS_PIN		5
-#define PHIL_SS_PIN 		3
-#define NAM_SS_PIN 			7
-#define DAZ_SS_PIN 			8
-#define SANJIT_SS_PIN 		9
+#define BUTTON_PIN 			9
+#define AIMEE_SS_PIN		0
+#define PHIL_SS_PIN 		1
+#define NAM_SS_PIN 			2
+#define DAZ_SS_PIN 			3
+#define SANJIT_SS_PIN 		4
 #define RST_PIN 			10
 
 #define AIMEE 			0
@@ -110,9 +118,9 @@ void setup()
 	lcd.backlight();
 	lcd.clear();
 	lcd.home();
-	lcd.print("Press button");
+	lcd.print("Press button to");
 	lcd.setCursor(0,1);
-	lcd.print("to assign seats...");
+	lcd.print("assign seats...");
 }
 
 // Main loop
@@ -366,9 +374,9 @@ void seating_result_message(SEATING_RESULT result)
 			delay(1000);
 			lcd.clear();
 			lcd.home();
-			lcd.print("Press button");
+			lcd.print("Press button to");
 			lcd.setCursor(0,1);
-			lcd.print("to assign seats...");
+			lcd.print("assign seats...");
 			break;
 
 		case PHIL_SPILL:
@@ -384,9 +392,9 @@ void seating_result_message(SEATING_RESULT result)
 			delay(1000);
 			lcd.clear();
 			lcd.home();
-			lcd.print("Press button");
+			lcd.print("Press button to");
 			lcd.setCursor(0,1);
-			lcd.print("to assign seats...");
+			lcd.print("assign seats...");
 			break;
 
 		case AIMEE_TRIGGERED_RACISM:
@@ -402,9 +410,9 @@ void seating_result_message(SEATING_RESULT result)
 			delay(1000);
 			lcd.clear();
 			lcd.home();
-			lcd.print("Press button");
+			lcd.print("Press button to");
 			lcd.setCursor(0,1);
-			lcd.print("to assign seats...");
+			lcd.print("assign seats...");
 			break;
 			
 		case NAM_GETS_THE_GOSS:
@@ -412,7 +420,7 @@ void seating_result_message(SEATING_RESULT result)
 			lcd.home();
 			lcd.setCursor(0,1);
 			lcd.print("DAZ GOSS DAZ GOSS DAZ GOSS DAZ GOSS DAZ ");
-			scroll_lcd_text_top("One of you bastards told Nam about the time I got kicked out of Willow #chairgate");
+			scroll_lcd_text_top("One of you bastards told Nam about my bard character in DnD. Now she's not talking to me");
 			delay(1000);
 			lcd.clear();
 			lcd.home();
@@ -420,9 +428,9 @@ void seating_result_message(SEATING_RESULT result)
 			delay(1000);
 			lcd.clear();
 			lcd.home();
-			lcd.print("Press button");
+			lcd.print("Press button to");
 			lcd.setCursor(0,1);
-			lcd.print("to assign seats...");
+			lcd.print("assign seats...");
 			break;
 
 		case NO_SEXY_DAZ:
@@ -438,9 +446,9 @@ void seating_result_message(SEATING_RESULT result)
 			delay(1000);
 			lcd.clear();
 			lcd.home();
-			lcd.print("Press button");
+			lcd.print("Press button to");
 			lcd.setCursor(0,1);
-			lcd.print("to assign seats...");
+			lcd.print("assign seats...");
 			break;
 
 		default:
