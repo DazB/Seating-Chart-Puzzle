@@ -1,5 +1,8 @@
 /**
- * A, P, N, D, S
+ * Seating Puzzle for Steven and Sam's wedding escape room
+ * If you're reading this, then HI x
+ * Plz don't judge bad code I wrote in a semi rush (but in your position I would defo be
+ * looking for anything bad to judge)
  * 
  * -----------------------------------------------------------------------------------------
  * Signal          	Device Pin 	Arduino Uno Pin  		   			           
@@ -439,6 +442,24 @@ void seating_result_message(SEATING_RESULT result)
 			lcd.setCursor(0,1);
 			lcd.print("DAZ NOT HOT DAZ NOT HOT DAZ NOT HOT ");
 			scroll_lcd_text_top("Nam just looked at me from the left for the first time and she's disgusted");
+			delay(1000);
+			lcd.clear();
+			lcd.home();
+			lcd.print("Try again!");
+			delay(1000);
+			lcd.clear();
+			lcd.home();
+			lcd.print("Press button to");
+			lcd.setCursor(0,1);
+			lcd.print("assign seats...");
+			break;
+
+		case WRONG:
+			lcd.clear();
+			lcd.home();
+			lcd.setCursor(0,1);
+			lcd.print("WRONG WRONG WRONG WRONG WRONG WRONG  ");
+			scroll_lcd_text_top("You're wrong, but I dunno why. Maybe too many cards on one reader? Doesn't matter. WRONG");
 			delay(1000);
 			lcd.clear();
 			lcd.home();
